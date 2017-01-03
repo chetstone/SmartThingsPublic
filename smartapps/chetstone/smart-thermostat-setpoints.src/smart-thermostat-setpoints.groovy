@@ -27,14 +27,17 @@ definition(
 
 
 preferences {
-	section("Title") {
-		// TODO: put inputs here
+	section("Settings") {
+        input "thermostat", "capability.thermostat", required: true, title: "Thermostat"
+        input "cloudyset", "number", required: true, title: "Cloudy Day Setpoint"
+        input "sunnyset", "number", required: true, title: "Sunny Day Setpoint" 
+        input "threshold", "number", required: true, title: "Threshold (% sunny)" 
+        input "runtime", "time", required: true, title: "Time to execute every day"
 	}
 }
 
 def installed() {
 	log.debug "Installed with settings: ${settings}"
-
 	initialize()
 }
 
@@ -45,34 +48,54 @@ def updated() {
 	initialize()
 }
 
-def tomorrowSunny(def startHour, def endHour,  def fcst) {
+def tomorrowHowSunny(def startHour, def endHour) {
     def sum = 0
     def count = 0
+    Map sdata = getWeatherFeature('hourly', 'pws:KCOMOFFA6');
+ 
+    if(sdata.response.containsKey('error') || sdata == null) {
+    	sendNotificationEvent("Weather API error ${sdata?.response?.error}, setting setpoint assuming cloudy tomorrow")
+        log.debug "Error ${sdata.response.error}"
+        return 0
+    }
+
+    def fcst = sdata.hourly_forecast
+    def today = fcst[0].FCTTIME.weekday_name
+
     for (int i=0; i < fcst.size(); i += 1) {
+        if ( fcst[i].FCTTIME.weekday_name == today ) {
+            continue
+        }
         if ( fcst[i].FCTTIME.hour.toInteger() >= startHour) {
             if (fcst[i].FCTTIME.hour.toInteger() >= endHour) {
                 break
             }
             count += 1
             sum += 100 - fcst[i].sky.toInteger()
-            //log.debug fcst[i].FCTTIME.hour
+            log.debug "hour: ${fcst[i].FCTTIME.hour} sunny: ${100 - fcst[i].sky.toInteger()}"
         }
+    }
+    if (count == 0 || sum == 0) {
+        return 0
     }
     sum/count
 }
 
-
-def initialize() {
-	// TODO: subscribe to attributes, devices, locations, etc.
-    Map sdata = getWeatherFeature('hourly', 'pws:KCOMOFFA6');
- 
-    if(sdata.response.containsKey('error') || sdata == null) {
-    	log.debug "Weather API error, skipping weather check"
-        return false
-    }
-
-    log.debug tomorrowSunny(9, 16, sdata.hourly_forecast)
-
+def setSetpoint(howSunny) {
+    def setpoint = howSunny > threshold ? sunnyset : cloudyset
+    settings.thermostat.setHeatingSetpoint(setpoint)
+    setpoint
 }
 
-// TODO: implement event handlers
+def handler() {
+    def sunniness = tomorrowHowSunny(9, 16)
+    def setpoint = setSetpoint(sunniness)
+    sendNotificationEvent(
+        "Tomorrow will be sunny ${sunniness}% of the time. Setting setpoint to ${setpoint}℉")
+    log.debug "handler called at ${new Date()}"
+}
+
+def initialize() {
+    schedule(runtime, handler)
+    log.debug tomorrowHowSunny(9, 16) 
+}
