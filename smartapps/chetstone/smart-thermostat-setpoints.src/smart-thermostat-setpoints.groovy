@@ -45,34 +45,33 @@ def updated() {
 	initialize()
 }
 
-    def pickRange(def start, def end,  def fcst, block) {
-        for (int i=0; i < fcst.size(); i += 1) {
-            if ( fcst[i].FCTTIME.hour.toInteger() >= start) {
-                if (fcst[i].FCTTIME.hour.toInteger() >= end) {
-                    break
-                }
-                block([fcst[i].FCTTIME.hour,fcst[i].sky])
+def tomorrowSunny(def startHour, def endHour,  def fcst) {
+    def sum = 0
+    def count = 0
+    for (int i=0; i < fcst.size(); i += 1) {
+        if ( fcst[i].FCTTIME.hour.toInteger() >= startHour) {
+            if (fcst[i].FCTTIME.hour.toInteger() >= endHour) {
+                break
             }
+            count += 1
+            sum += 100 - fcst[i].sky.toInteger()
+            //log.debug fcst[i].FCTTIME.hour
         }
-        
     }
+    sum/count
+}
 
 
 def initialize() {
 	// TODO: subscribe to attributes, devices, locations, etc.
     Map sdata = getWeatherFeature('hourly', 'pws:KCOMOFFA6');
  
-    log.debug sdata.response    
     if(sdata.response.containsKey('error') || sdata == null) {
     	log.debug "Weather API error, skipping weather check"
         return false
     }
-    def fcst =sdata.hourly_forecast
 
-
-    pickRange(9, 15, fcst) {
-        log.debug it
-    }
+    log.debug tomorrowSunny(9, 16, sdata.hourly_forecast)
 
 }
 
