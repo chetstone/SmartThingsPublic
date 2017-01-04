@@ -88,14 +88,15 @@ def setSetpoint(howSunny) {
 }
 
 def handler() {
-    def sunniness = tomorrowHowSunny(9, 16)
-    def setpoint = setSetpoint(sunniness)
+    float sunniness = tomorrowHowSunny(9, 16)
+    int setpoint = setSetpoint(sunniness)
     sendNotificationEvent(
-        "Tomorrow will be sunny ${sunniness}% of the time. Setting setpoint to ${setpoint}℉")
+        "Tomorrow will be sunny ${sunniness.round()}% of the time. Setting setpoint to ${setpoint}℉")
     log.debug "handler called at ${new Date()}"
 }
 
 def initialize() {
     schedule(runtime, handler)
-    log.debug tomorrowHowSunny(9, 16) 
+    float sunny = tomorrowHowSunny(9, 16)
+    log.debug "${sunny.round()}"
 }
