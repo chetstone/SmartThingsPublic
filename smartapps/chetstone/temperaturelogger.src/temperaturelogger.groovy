@@ -18,7 +18,14 @@ definition(
     iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
     iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience%402x.png",
     iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience%402x.png",
-    oauth: true)
+    oauth: true) {
+    appSetting "account0"
+    appSetting "password0"
+    appSetting "url0"
+    appSetting "account1"
+    appSetting "password1"
+    appSetting "url1"
+}
 
 preferences {
     section("Configure") {
@@ -59,7 +66,7 @@ def parseHttpResponse(response) {
 
 def writeChannelData( thermostat, outtemp, outhumid,  id) {
 
-    def uri = "https://account0:password0@url0"
+    def uri = "https://${appSettings.account0}:${appSettings.password0}@${appSettings.url0}"
     def json = "{\"docs\":[{\"_id\":\"${id}\",\"Thermostat\":${thermostat},\"OutTemp\":${outtemp},\"OutHumidity\":${outhumid}}]}"
 
     def headers = [
@@ -77,7 +84,7 @@ def writeChannelData( thermostat, outtemp, outhumid,  id) {
     httpPostJson(params) {response -> parseHttpResponse(response)}
 
     // Also post to Crystal
-    uri = "http://account1:password1@url1"
+    uri = "http://${appSettings.account1}:${appSettings.password1}@${appSettings.url1}"
     params = [
         uri: uri,
         headers: headers,
