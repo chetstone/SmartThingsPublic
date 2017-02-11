@@ -53,7 +53,7 @@ def tomorrowHowSunny(def startHour, def endHour) {
     def count = 0
     Map sdata = getWeatherFeature('hourly', 'pws:KCOMOFFA6');
  
-    if(sdata.response.containsKey('error') || sdata == null) {
+    if(sdata == null || sdata.response == null || sdata.response.containsKey('error') ) {
     	sendNotificationEvent("Weather API error ${sdata?.response?.error}, setting setpoint assuming cloudy tomorrow")
         log.debug "Error ${sdata.response.error}"
         return 0
