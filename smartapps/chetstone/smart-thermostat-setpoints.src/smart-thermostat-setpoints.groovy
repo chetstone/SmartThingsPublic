@@ -73,14 +73,18 @@ def parseHttpResponse(response) {
 
 }
 
-def writeChannelData( value) {
+def writeChannelData( wxu, twc) {
     def now = new Date()
     def id = now.format("yyyy-MM-dd'T'HH:mm:ss'Z'") + ".Notes"
     log.debug(id )
 	
 
 	def uri = "https://${appSettings.account0}:${appSettings.password0}@${appSettings.url0}";
-	def json = "{\"docs\":[{\"_id\":\"${id}\",\"predictions\":\"From groovy\",\"wxunderground\":${value}}]}";
+    def twcString = (twc > 100) ? "": ",\"twcdaily\":${twc}"
+    def wxuString = (wxu > 100) ? "": ",\"wxunderground\":${wxu}"
+  
+	def json = "{\"docs\":[{\"_id\":\"${id}\",\"predictions\":\"From groovy\"${wxuString}${twcString}}]}";
+    
 	def headers = [
         "Content-Type" : "application/json"
     ];
@@ -116,10 +120,6 @@ def writeChannelData( value) {
     }
 }
 
-// 
-
-
-
 def tomorrowHowSunny() {
 	def startHour = 8
 	def endHour = 16
@@ -127,46 +127,67 @@ def tomorrowHowSunny() {
     def count = 0
     def couch_count = 0
     def couch_sum = 0
+    def twcClouds = -1
     Map sdata = getWeatherFeature('hourly', 'pws:KCOCREST1');
  
-    if(sdata == null || sdata.response == null || sdata.response.containsKey('error') ) {
-    	sendNotificationEvent("Weather API error ${sdata?.response?.error}, setting setpoint assuming cloudy tomorrow")
-        log.debug "Error ${sdata.response.error}"
-        return 0
-    }
-	log.debug "Hourly Forecast: ${sdata.hourly_forecast[0].FCTTIME}"
-    def fcst = sdata.hourly_forecast
-    def today = fcst[0].FCTTIME.weekday_name
-    // weight mornings higher
-    def times = [startHour, 9, 9, 10, 10, 10, 11, 11, 12, 13, 14, 15, endHour]
+    if( sdata == null || sdata.response == null || sdata.response.containsKey('error') ) {
+    	sendNotificationEvent("Weather Underground API error ${sdata?.response?.error}")
+        log.debug "Error ${sdata && sdata.response ? sdata.response.error : "null response"}"
+    } else {
+        //log.debug "Hourly Forecast: ${sdata.hourly_forecast[0].FCTTIME}"
+        def fcst = sdata.hourly_forecast
+        def today = fcst[0].FCTTIME.weekday_name
+        // weight mornings higher
+        def times = [startHour, 9, 9, 10, 10, 10, 11, 11, 12, 13, 14, 15, endHour]
 
-    for (int i=0; i < fcst.size(); i += 1) {
-        if ( fcst[i].FCTTIME.weekday_name == today ) {
-            continue
-        }
-        if ( fcst[i].FCTTIME.hour.toInteger() >= startHour) {
-            if (fcst[i].FCTTIME.hour.toInteger() >= endHour) {
-                break
+        for (int i=0; i < fcst.size(); i += 1) {
+            if ( fcst[i].FCTTIME.weekday_name == today ) {
+                continue
             }
-            for (int j=0; j < times.size(); j += 1) {
-            	if (fcst[i].FCTTIME.hour.toInteger() == times[j]) {
-		            count += 1
-        		    sum += 100 - fcst[i].sky.toInteger()
-            //		log.debug "hour: ${fcst[i].FCTTIME.hour} sunny: ${100 - fcst[i].sky.toInteger()}"
+            if ( fcst[i].FCTTIME.hour.toInteger() >= startHour) {
+                if (fcst[i].FCTTIME.hour.toInteger() >= endHour) {
+                    break
                 }
+                for (int j=0; j < times.size(); j += 1) {
+                    if (fcst[i].FCTTIME.hour.toInteger() == times[j]) {
+                        count += 1
+                        sum += 100 - fcst[i].sky.toInteger()
+                        //log.debug "hour: ${fcst[i].FCTTIME.hour} sunny: ${100 - fcst[i].sky.toInteger()}"
+                    }
+                }
+                // get unscaled sum for pushing to couchdb
+                couch_count += 1
+                couch_sum += 100 - fcst[i].sky.toInteger()
+                // log.debug "hour: ${fcst[i].FCTTIME.hour} sunny: ${100 - fcst[i].sky.toInteger()}"
             }
-            // get unscaled sum for pushing to couchdb
-            couch_count += 1
-            couch_sum += 100 - fcst[i].sky.toInteger()
-           // log.debug "hour: ${fcst[i].FCTTIME.hour} sunny: ${100 - fcst[i].sky.toInteger()}"
         }
     }
-    if (count == 0 || sum == 0) {
-    log.debug "Returning 0 and not sending to couch"
-        return 0
+    // Get TWC data
+    Map twc = getTwcForecast()
+    if (twc == null) {
+        sendNotificationEvent("TWC API returned null")
+    } else {
+        def dayname = twc.daypart[0]['daypartName'][2]
+        if (dayname == 'Tomorrow') {
+            twcClouds = twc.daypart[0]['cloudCover'][2]
+            log.debug "Cloud Cover tomorrow is ${twcClouds}"
+            sendNotificationEvent("TWC Sunniness tomorrow is ${100-twcClouds}")
+        } else {
+            sendNotificationEvent("Error in TWC data");
+            log.debug "Unexpected data in twc.daypart[0][daypartName][2]. Got ${dayname}"
+        }
     }
-    log.debug "Unscaled prediction: ${couch_sum/couch_count}"
-    writeChannelData(couch_sum/couch_count)
+    log.debug "Unscaled prediction: ${couch_count == 0 ? "Unavailable" :couch_sum/couch_count}"
+    writeChannelData(couch_count == 0 ? 101 : couch_sum/couch_count, (100-twcClouds))
+    
+    if (count == 0 || sum == 0) {
+        if (twcClouds == -1) {
+            log.debug "Returning 0-- No WXunderground or TWC data"
+            return 0
+        } else {
+            return 100 - twcClouds
+        }
+    }
     sum/count
 }
 
