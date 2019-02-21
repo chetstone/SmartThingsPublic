@@ -61,39 +61,48 @@ def initialize() {
 }
 
 def parseHttpResponse(response) {
-    log.debug "HTTP Response: ${response}"
+	def code = response.getStatus();
+    log.debug "HTTP Response: ${code}"
+//            response.headers.each {
+//            log.debug "${it.name} : ${it.value}"
+//        }
+	log.debug "HTTP Data: ${response.data}"
+    if (code > 399) {
+    	def dataStr = response.data;
+    	sendPush("TemperatureLogger got HTTP response ${code}")
+    }
+
 }
 
 def writeChannelData( thermostat, outtemp, outhumid,  id) {
-
-    def uri = "https://${appSettings.account0}:${appSettings.password0}@${appSettings.url0}"
-    def json = "{\"docs\":[{\"_id\":\"${id}\",\"Thermostat\":${thermostat},\"OutTemp\":${outtemp},\"OutHumidity\":${outhumid}}]}"
-
-    def headers = [
+	def uri = "https://${appSettings.account0}:${appSettings.password0}@${appSettings.url0}";
+	def json = "{\"docs\":[{\"_id\":\"${id}\",\"Thermostat\":${thermostat},\"OutTemp\":${outtemp},\"OutHumidity\":${outhumid}}]}";
+	def headers = [
         "Content-Type" : "application/json"
-    ]
-
-    def params = [
+    ];
+	def params = [
         uri: uri,
         headers: headers,
         body: json,
         path: "_bulk_docs"
-    ]
+    ];
+  
     log.debug(params)
 
     httpPostJson(params) {response -> parseHttpResponse(response)}
 
-    // Also post to Crystal
-    uri = "http://${appSettings.account1}:${appSettings.password1}@${appSettings.url1}"
-    params = [
-        uri: uri,
-        headers: headers,
-        body: json,
-        path: "_bulk_docs"
-    ]
-    log.debug(params)
+    // Also post to Digital Ocean
+    // uri = "https://${appSettings.account1}:${appSettings.password1}@${appSettings.url1}"
+    
+    // params = [
+    //    uri: uri,
+     //   headers: headers,
+    //    body: json,
+     //   path: "_bulk_docs"
+    // ]
+    // log.debug(params)
 
-    httpPostJson(params) {response -> parseHttpResponse(response)}
+    // httpPostJson(params) {response -> parseHttpResponse(response)}
 }
 
 // Post current temperature to the remote web service
