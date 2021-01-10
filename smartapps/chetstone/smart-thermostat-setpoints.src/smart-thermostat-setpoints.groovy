@@ -190,52 +190,19 @@ def tomorrowHowSunny() {
     def couch_count = 0
     def couch_sum = 0
     def twcClouds = -1
-    Map sdata = getWeatherFeature('hourly', 'pws:KCOCREST1');
- 
-    if( sdata == null || sdata.response == null || sdata.response.containsKey('error') ) {
-    	sendNotificationEvent("Weather Underground API error ${sdata?.response?.error}")
-        log.debug "Error ${sdata && sdata.response ? sdata.response.error : "null response"}"
-    } else {
-        //log.debug "Hourly Forecast: ${sdata.hourly_forecast[0].FCTTIME}"
-        def fcst = sdata.hourly_forecast
-        def today = fcst[0].FCTTIME.weekday_name
-        // weight mornings higher
-        def times = [startHour, 9, 9, 10, 10, 10, 11, 11, 12, 13, 14, 15, endHour]
 
-        for (int i=0; i < fcst.size(); i += 1) {
-            if ( fcst[i].FCTTIME.weekday_name == today ) {
-                continue
-            }
-            if ( fcst[i].FCTTIME.hour.toInteger() >= startHour) {
-                if (fcst[i].FCTTIME.hour.toInteger() >= endHour) {
-                    break
-                }
-                for (int j=0; j < times.size(); j += 1) {
-                    if (fcst[i].FCTTIME.hour.toInteger() == times[j]) {
-                        count += 1
-                        sum += 100 - fcst[i].sky.toInteger()
-                        //log.debug "hour: ${fcst[i].FCTTIME.hour} sunny: ${100 - fcst[i].sky.toInteger()}"
-                    }
-                }
-                // get unscaled sum for pushing to couchdb
-                couch_count += 1
-                couch_sum += 100 - fcst[i].sky.toInteger()
-                // log.debug "hour: ${fcst[i].FCTTIME.hour} sunny: ${100 - fcst[i].sky.toInteger()}"
-            }
-        }
-    }
     // Get TWC data
     Map twc = getTwcForecast()
     if (twc == null) {
-        sendNotificationEvent("TWC API returned null")
+        sendNotification("TWC API returned null")
     } else {
         def dayname = twc.daypart[0]['daypartName'][2]
         if (dayname == 'Tomorrow') {
             twcClouds = twc.daypart[0]['cloudCover'][2]
             //log.debug "Cloud Cover tomorrow is ${twcClouds}"
-            sendNotificationEvent("TWC Sunniness tomorrow is ${100-twcClouds}")
+            sendNotification("TWC Sunniness tomorrow is ${100-twcClouds}")
         } else {
-            sendNotificationEvent("Error in TWC data");
+            sendNotification("Error in TWC data");
             log.debug "Unexpected data in twc.daypart[0][daypartName][2]. Got ${dayname}"
         }
     }
@@ -244,7 +211,7 @@ def tomorrowHowSunny() {
     
     if (count == 0 || sum == 0) {
         if (twcClouds == -1) {
-            log.debug "Returning 0-- No WXunderground or TWC data"
+            log.debug "Returning 0-- No TWC data"
             return 0
         } else {
             return 100 - twcClouds
@@ -269,16 +236,16 @@ def setSetpoint(howSunny) {
 def handler() {
     float sunniness = tomorrowHowSunny()
     int setpoint = setSetpoint(sunniness)
-    sendNotificationEvent(
+    sendNotification(
         "Tomorrow will be sunny ${sunniness.round()}% of the time. Setting setpoint to ${setpoint}℉")
     log.debug "handler called at ${new Date()}"
 }
 
 def initialize() {
     schedule(runtime, handler)
-    log.debug "Now is ${todayDateOnly().format(smartThingsDateFormat())}, " +
-    "Start Time is ${startDate().format(smartThingsDateFormat())}, " +
-    "End Time is ${endDate().format(smartThingsDateFormat())}"
+//    log.debug "Now is ${todayDateOnly().format(smartThingsDateFormat())}, " +
+//    "Start Time is ${startDate().format(smartThingsDateFormat())}, " +
+//    "End Time is ${endDate().format(smartThingsDateFormat())}"
     float sunny = tomorrowHowSunny()
     setSetpoint(sunny)
     log.debug "${sunny.round()}"
